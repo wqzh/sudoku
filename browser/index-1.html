@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数独求解器</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    background: #f0f2f5;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  h1 { font-size: 28px; color: #1a1a2e; margin-bottom: 16px; letter-spacing: 2px; }
+
+  /* info bar */
+  #info-bar {
+    height: 44px; display: flex; align-items: center; justify-content: center;
+    gap: 16px; margin-bottom: 12px; font-size: 16px; color: #333;
+  }
+  #info-bar .count-display {
+    font-weight: 600; color: #1a1a2e; font-size: 18px; min-width: 240px; text-align: center;
+  }
+  #nav-group { display: none; align-items: center; gap: 10px; }
+  #nav-group.visible { display: flex; }
+  #nav-group button {
+    width: 36px; height: 36px; border: 2px solid #4361ee; border-radius: 8px;
+    background: #fff; color: #4361ee; font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+  }
+  #nav-group button:hover:not(:disabled) { background: #4361ee; color: #fff; }
+  #nav-group button:disabled { border-color: #ccc; color: #ccc; cursor: not-allowed; }
+  #nav-group .page-label { font-weight: 600; min-width: 50px; text-align: center; font-size: 16px; }
+
+  /* board */
+  #board {
+    display: grid; grid-template-columns: repeat(9, 52px); grid-template-rows: repeat(9, 52px);
+    border: 3px solid #1a1a2e; background: #fff;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.10); border-radius: 4px; overflow: hidden;
+  }
+  #board .cell {
+    width: 52px; height: 52px; text-align: center; font-size: 22px; font-weight: 500;
+    border: 1px solid #d1d5db; outline: none; color: #1a1a2e; background: #fafafa;
+    caret-color: transparent; transition: background 0.15s;
+  }
+  #board .cell:focus { background: #e8ecff; }
+  #board .cell.br { border-right: 3px solid #1a1a2e; }
+  #board .cell.bb { border-bottom: 3px solid #1a1a2e; }
+  #board .cell.origin { color: #1a1a2e; background: #f0f2f5; font-weight: 600; }
+  #board .cell.solution { color: #1b5e20; font-weight: 700; background: #c8e6c9; }
+  #board .cell.origin.solution { color: #1b5e20; background: #c8e6c9; }
+
+  /* buttons */
+  #btn-group { margin-top: 20px; display: flex; gap: 12px; }
+  #btn-group button {
+    padding: 12px 24px; font-size: 16px; font-weight: 600; border: none; border-radius: 8px;
+    cursor: pointer; transition: all 0.15s; letter-spacing: 1px;
+  }
+  #btn-group .btn-solve { background: #4361ee; color: #fff; }
+  #btn-group .btn-solve:hover { background: #3a56d4; }
+  #btn-group .btn-fill { background: #4cc9f0; color: #fff; }
+  #btn-group .btn-fill:hover { background: #3ab0d6; }
+  #btn-group .btn-clear { background: #fff; color: #ef476f; border: 2px solid #ef476f !important; }
+  #btn-group .btn-clear:hover { background: #ef476f; color: #fff; }
+
+  /* dialog */
+  #dialog-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+    z-index: 100; align-items: center; justify-content: center;
+  }
+  #dialog-overlay.show { display: flex; }
+  #dialog-box {
+    background: #fff; border-radius: 12px; padding: 32px 36px 24px; text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  }
+  #dialog-box p { font-size: 18px; margin-bottom: 24px; color: #333; }
+  #dialog-box .dialog-btns { display: flex; justify-content: center; gap: 16px; }
+  #dialog-box .dialog-btns button {
+    padding: 10px 32px; font-size: 15px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; transition: all 0.15s;
+  }
+  #dialog-box .btn-confirm { background: #ef476f; color: #fff; }
+  #dialog-box .btn-confirm:hover { background: #d63d60; }
+  #dialog-box .btn-cancel { background: #f0f2f5; color: #555; }
+  #dialog-box .btn-cancel:hover { background: #e0e2e7; }
+
+  .error-msg { color: #ef476f; font-size: 14px; margin-top: 8px; text-align: center; }
+</style>
+</head>
+<body>
+
+<h1>数独求解器</h1>
+
+<div id="info-bar">
+  <div class="count-display" id="count-display"></div>
+  <div id="nav-group">
+    <button id="btn-prev" title="上一个解">&#9664;</button>
+    <span class="page-label" id="page-label">1/1</span>
+    <button id="btn-next" title="下一个解">&#9654;</button>
+  </div>
+</div>
+
+<div id="board"></div>
+<div id="error-display"></div>
+
+<div id="btn-group">
+  <button class="btn-fill" id="btn-fill">填入示例</button>
+  <button class="btn-solve" id="btn-solve">求 解</button>
+  <button class="btn-clear" id="btn-clear">清 空</button>
+</div>
+
+<div id="dialog-overlay">
+  <div id="dialog-box">
+    <p>是否要清空？</p>
+    <div class="dialog-btns">
+      <button class="btn-confirm" id="dialog-confirm">确 认</button>
+      <button class="btn-cancel" id="dialog-cancel">取 消</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===================== Pure JS Sudoku Solver =====================
+const Solver = (() => {
+  const N = 9;
+  const SIZE = N * N;
+
+  function isValid(grid, row, col, num) {
+    for (let c = 0; c < N; c++) {
+      if (grid[row * N + c] === num) return false;
+    }
+    for (let r = 0; r < N; r++) {
+      if (grid[r * N + col] === num) return false;
+    }
+    const br = Math.floor(row / 3) * 3;
+    const bc = Math.floor(col / 3) * 3;
+    for (let r = br; r < br + 3; r++) {
+      for (let c = bc; c < bc + 3; c++) {
+        if (grid[r * N + c] === num) return false;
+      }
+    }
+    return true;
+  }
+
+  function solve(grid, pos, solutions, maxSolutions) {
+    if (solutions.length >= maxSolutions) return;
+    if (pos === SIZE) {
+      solutions.push(new Int8Array(grid));
+      return;
+    }
+    const row = Math.floor(pos / N);
+    const col = pos % N;
+    if (grid[pos] !== 0) {
+      solve(grid, pos + 1, solutions, maxSolutions);
+      return;
+    }
+    for (let num = 1; num <= N; num++) {
+      if (isValid(grid, row, col, num)) {
+        grid[pos] = num;
+        solve(grid, pos + 1, solutions, maxSolutions);
+        grid[pos] = 0;
+      }
+    }
+  }
+
+  function findSolutions(input, maxSolutions = 5) {
+    const grid = new Int8Array(input);
+    const solutions = [];
+    solve(grid, 0, solutions, maxSolutions);
+    return { count: solutions.length, solutions };
+  }
+
+  return { findSolutions, isValid };
+})();
+
+// ===================== Example Puzzle =====================
+const EXAMPLE = [
+  5,3,0, 0,7,0, 0,0,0,
+  6,0,0, 1,9,5, 0,0,0,
+  0,9,8, 0,0,0, 0,6,0,
+  8,0,0, 0,6,0, 0,0,3,
+  4,0,0, 8,0,3, 0,0,1,
+  7,0,0, 0,2,0, 0,0,6,
+  0,6,0, 0,0,0, 2,8,0,
+  0,0,0, 4,1,9, 0,0,5,
+  0,0,0, 0,8,0, 0,7,9
+];
+
+function loadExample() {
+  const grid = [];
+  for (let i = 0; i < 81; i++) {
+    if (EXAMPLE[i] !== 0) {
+      cells[i].value = EXAMPLE[i];
+      cells[i].classList.add('origin');
+    } else {
+      cells[i].value = '';
+      cells[i].classList.remove('origin', 'solution');
+    }
+  }
+  // Reset display state
+  countDisplay.textContent = '';
+  navGroup.classList.remove('visible');
+  allSolutions = []; currentIdx = -1; totalCount = 0;
+  errorEl.textContent = '';
+}
+
+// ===================== Board =====================
+const boardEl = document.getElementById('board');
+const cells = [];
+
+function createBoard() {
+  boardEl.innerHTML = '';
+  cells.length = 0;
+  for (let i = 0; i < 81; i++) {
+    const cell = document.createElement('input');
+    cell.type = 'text'; cell.maxLength = 1; cell.className = 'cell';
+    const col = i % 9, row = Math.floor(i / 9);
+    if (col === 2 || col === 5) cell.classList.add('br');
+    if (row === 2 || row === 5) cell.classList.add('bb');
+    cell.addEventListener('input', e => {
+      const v = e.target.value;
+      if (!/^[1-9]$/.test(v)) e.target.value = '';
+      clearHighlights();
+    });
+    boardEl.appendChild(cell);
+    cells.push(cell);
+  }
+}
+
+function getGrid() {
+  const g = new Array(81);
+  for (let i = 0; i < 81; i++) {
+    const v = cells[i].value.trim();
+    g[i] = v === '' ? 0 : parseInt(v, 10);
+  }
+  return g;
+}
+
+function setGrid(g) {
+  for (let i = 0; i < 81; i++) {
+    cells[i].value = g[i] === 0 ? '' : String(g[i]);
+    cells[i].classList.remove('origin', 'solution');
+    if (g[i] !== 0) cells[i].classList.add('origin');
+  }
+}
+
+function clearHighlights() {
+  for (const c of cells) c.classList.remove('solution');
+}
+
+// ===================== Dialog =====================
+const dialogOverlay = document.getElementById('dialog-overlay');
+const dialogConfirm = document.getElementById('dialog-confirm');
+const dialogCancel = document.getElementById('dialog-cancel');
+let dialogCb = null;
+
+function showConfirm(msg, cb) {
+  dialogOverlay.querySelector('p').textContent = msg;
+  dialogOverlay.classList.add('show');
+  dialogCb = cb;
+}
+function hideConfirm() { dialogOverlay.classList.remove('show'); dialogCb = null; }
+
+dialogConfirm.addEventListener('click', () => { if (dialogCb) dialogCb(); hideConfirm(); });
+dialogCancel.addEventListener('click', hideConfirm);
+
+// ===================== State =====================
+let allSolutions = [];
+let currentIdx = -1;
+let totalCount = 0;
+let inputGrid = [];
+
+const countDisplay = document.getElementById('count-display');
+const navGroup = document.getElementById('nav-group');
+const btnPrev = document.getElementById('btn-prev');
+const btnNext = document.getElementById('btn-next');
+const pageLabel = document.getElementById('page-label');
+const errorEl = document.getElementById('error-display');
+const btnSolve = document.getElementById('btn-solve');
+const btnFill = document.getElementById('btn-fill');
+
+// ===================== Solve =====================
+btnSolve.addEventListener('click', () => {
+  errorEl.textContent = '';
+  inputGrid = getGrid();
+
+  // Validate
+  for (let i = 0; i < 81; i++) {
+    if (inputGrid[i] < 0 || inputGrid[i] > 9) {
+      errorEl.textContent = '请输入 1-9 之间的数字。';
+      return;
+    }
+  }
+
+  // Save original input for display after solving
+  const originalInput = new Int8Array(inputGrid);
+
+  // Check basic validity
+  for (let i = 0; i < 81; i++) {
+    if (inputGrid[i] === 0) continue;
+    const r = Math.floor(i / 9), c = i % 9;
+    const val = inputGrid[i];
+    inputGrid[i] = 0;
+    if (!Solver.isValid(inputGrid, r, c, val)) {
+      errorEl.textContent = '冲突：位置 (' + (r + 1) + ',' + (c + 1) + ') 的数字与行/列/宫冲突。';
+      inputGrid[i] = val;
+      return;
+    }
+    inputGrid[i] = val;
+  }
+
+  const result = Solver.findSolutions(inputGrid, 5);
+  totalCount = result.count;
+  allSolutions = result.solutions;
+
+  displayResults();
+  if (allSolutions.length > 0) showCurrentSolution();
+});
+
+function displayResults() {
+  if (totalCount === 0) {
+    countDisplay.textContent = '无解';
+    navGroup.classList.remove('visible');
+  } else {
+    const displayCount = Math.min(totalCount, 5);
+    countDisplay.textContent = `共有 ${totalCount} 个解 (最多展示 5 个)`;
+    currentIdx = 0;
+    if (displayCount > 1) {
+      navGroup.classList.add('visible');
+      updateNav();
+    } else {
+      navGroup.classList.remove('visible');
+    }
+  }
+}
+
+function showCurrentSolution() {
+  if (allSolutions.length === 0) return;
+  setGrid(inputGrid);
+  const sol = allSolutions[currentIdx];
+  for (let i = 0; i < 81; i++) {
+    if (inputGrid[i] === 0 && sol[i] !== 0) {
+      cells[i].value = String(sol[i]);
+      cells[i].classList.add('solution');
+    }
+  }
+}
+
+function updateNav() {
+  const total = Math.min(allSolutions.length, 5);
+  pageLabel.textContent = `${currentIdx + 1}/${total}`;
+  btnPrev.disabled = currentIdx <= 0;
+  btnNext.disabled = currentIdx >= total - 1;
+}
+
+btnPrev.addEventListener('click', () => {
+  if (currentIdx > 0) { currentIdx--; showCurrentSolution(); updateNav(); }
+});
+
+btnNext.addEventListener('click', () => {
+  if (currentIdx < allSolutions.length - 1) { currentIdx++; showCurrentSolution(); updateNav(); }
+});
+
+// ===================== Fill Example =====================
+btnFill.addEventListener('click', loadExample);
+
+// ===================== Clear =====================
+document.getElementById('btn-clear').addEventListener('click', () => {
+  showConfirm('是否要清空？', resetBoard);
+});
+
+function resetBoard() {
+  for (const c of cells) { c.value = ''; c.classList.remove('origin', 'solution'); }
+  countDisplay.textContent = '';
+  navGroup.classList.remove('visible');
+  allSolutions = []; currentIdx = -1; totalCount = 0;
+  errorEl.textContent = '';
+}
+
+// ===================== Init =====================
+createBoard();
+</script>
+</body>
+</html>

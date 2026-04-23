@@ -1,0 +1,34 @@
+emsdk/
+
+# WASM compiled output
+wasm/solver.js
+wasm/solver.wasm
+wasm/solver.wasm.map
+
+# Build artifacts
+c_solver/*.o
+c_solver/*.a
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log

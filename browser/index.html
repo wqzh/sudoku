@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数独求解器</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: #f0f2f5;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  #lang-selector {
+    position: fixed; top: 16px; right: 16px; z-index: 200;
+  }
+  #lang-selector select {
+    padding: 6px 10px; font-size: 14px; border: 2px solid #4361ee; border-radius: 6px;
+    background: #fff; color: #333; cursor: pointer;
+  }
+  #lang-selector select:focus { outline: none; border-color: #3a56d4; }
+  h1 { font-size: 28px; color: #1a1a2e; margin-bottom: 16px; letter-spacing: 2px; }
+  #info-bar {
+    height: 44px; display: flex; align-items: center; justify-content: center;
+    gap: 16px; margin-bottom: 12px; font-size: 16px; color: #333;
+  }
+  #info-bar .count-display {
+    font-weight: 600; color: #1a1a2e; font-size: 18px; min-width: 240px; text-align: center;
+  }
+  #nav-group { display: none; align-items: center; gap: 10px; }
+  #nav-group.visible { display: flex; }
+  #nav-group button {
+    width: 36px; height: 36px; border: 2px solid #4361ee; border-radius: 8px;
+    background: #fff; color: #4361ee; font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+  }
+  #nav-group button:hover:not(:disabled) { background: #4361ee; color: #fff; }
+  #nav-group button:disabled { border-color: #ccc; color: #ccc; cursor: not-allowed; }
+  #nav-group .page-label { font-weight: 600; min-width: 50px; text-align: center; font-size: 16px; }
+  #board {
+    display: grid; grid-template-columns: repeat(9, 52px); grid-template-rows: repeat(9, 52px);
+    border: 3px solid #1a1a2e; background: #fff;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.10); border-radius: 4px; overflow: hidden;
+  }
+  #board .cell {
+    width: 52px; height: 52px; text-align: center; font-size: 22px; font-weight: 500;
+    border: 1px solid #d1d5db; outline: none; color: #1a1a2e; background: #fafafa;
+    caret-color: transparent; transition: background 0.15s;
+  }
+  #board .cell:focus { background: #e8ecff; }
+  #board .cell.br { border-right: 3px solid #1a1a2e; }
+  #board .cell.bb { border-bottom: 3px solid #1a1a2e; }
+  #board .cell.origin { color: #1a1a2e; background: #f0f2f5; font-weight: 600; }
+  #board .cell.solution { color: #1b5e20; font-weight: 700; background: #c8e6c9; }
+  #board .cell.origin.solution { color: #1b5e20; background: #c8e6c9; }
+  #btn-group { margin-top: 20px; display: flex; gap: 12px; }
+  #btn-group button {
+    padding: 12px 24px; font-size: 16px; font-weight: 600; border: none; border-radius: 8px;
+    cursor: pointer; transition: all 0.15s; letter-spacing: 1px;
+  }
+  #btn-group .btn-solve { background: #4361ee; color: #fff; }
+  #btn-group .btn-solve:hover { background: #3a56d4; }
+  #btn-group .btn-fill { background: #4cc9f0; color: #fff; }
+  #btn-group .btn-fill:hover { background: #3ab0d6; }
+  #btn-group .btn-clear { background: #fff; color: #ef476f; border: 2px solid #ef476f !important; }
+  #btn-group .btn-clear:hover { background: #ef476f; color: #fff; }
+  #dialog-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+    z-index: 100; align-items: center; justify-content: center;
+  }
+  #dialog-overlay.show { display: flex; }
+  #dialog-box {
+    background: #fff; border-radius: 12px; padding: 32px 36px 24px; text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  }
+  #dialog-box p { font-size: 18px; margin-bottom: 24px; color: #333; }
+  #dialog-box .dialog-btns { display: flex; justify-content: center; gap: 16px; }
+  #dialog-box .dialog-btns button {
+    padding: 10px 32px; font-size: 15px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; transition: all 0.15s;
+  }
+  #dialog-box .btn-confirm { background: #ef476f; color: #fff; }
+  #dialog-box .btn-confirm:hover { background: #d63d60; }
+  #dialog-box .btn-cancel { background: #f0f2f5; color: #555; }
+  #dialog-box .btn-cancel:hover { background: #e0e2e7; }
+  .error-msg { color: #ef476f; font-size: 14px; margin-top: 8px; text-align: center; }
+  #import-dialog-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+    z-index: 100; align-items: center; justify-content: center;
+  }
+  #import-dialog-overlay.show { display: flex; }
+  #import-dialog-box {
+    background: #fff; border-radius: 12px; padding: 32px 36px 24px; text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18); min-width: 360px;
+  }
+  #import-dialog-box h3 { font-size: 18px; color: #1a1a2e; margin-bottom: 16px; }
+  #import-dialog-box .import-hint { font-size: 13px; color: #888; margin-bottom: 8px; }
+  #import-textarea {
+    width: 100%; height: 180px; font-family: Consolas,"Courier New",monospace;
+    font-size: 16px; text-align: center; border: 2px solid #d1d5db; border-radius: 8px;
+    padding: 12px; resize: none; letter-spacing: 2px; line-height: 1.6;
+  }
+  #import-textarea:focus { border-color: #4361ee; outline: none; }
+  #import-dialog-box .import-row { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 12px; }
+  #import-dialog-box label { font-size: 14px; color: #555; }
+  #import-dialog-box select {
+    padding: 6px 12px; font-size: 14px; border: 2px solid #d1d5db; border-radius: 6px;
+  }
+  #import-dialog-box .import-btns { display: flex; justify-content: center; gap: 16px; margin-top: 20px; }
+  #import-dialog-box .import-btns button {
+    padding: 10px 32px; font-size: 15px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; transition: all 0.15s;
+  }
+  #import-dialog-box .btn-import-confirm { background: #4cc9f0; color: #fff; }
+  #import-dialog-box .btn-import-confirm:hover { background: #3ab0d6; }
+  #import-dialog-box .btn-import-cancel { background: #f0f2f5; color: #555; }
+  #import-dialog-box .btn-import-cancel:hover { background: #e0e2e7; }
+  #import-error { color: #ef476f; font-size: 14px; margin-top: 8px; min-height: 20px; }
+</style>
+</head>
+<body>
+<div id="lang-selector">
+  <select id="lang-select">
+    <option value="zh">中文</option>
+    <option value="en">English</option>
+  </select>
+</div>
+<h1 id="page-title">数独求解器</h1>
+<div id="info-bar">
+  <div class="count-display" id="count-display"></div>
+  <div id="nav-group">
+    <button id="btn-prev" title="上一个解">&#9664;</button>
+    <span class="page-label" id="page-label">1/1</span>
+    <button id="btn-next" title="下一个解">&#9654;</button>
+  </div>
+</div>
+<div id="board"></div>
+<div id="error-display"></div>
+<div id="btn-group">
+  <button class="btn-fill" id="btn-fill" data-i18n="btnFill">填入示例</button>
+  <button class="btn-fill" id="btn-import" data-i18n="btnImport">手动输入</button>
+  <button class="btn-solve" id="btn-solve" data-i18n="btnSolve">求 解</button>
+  <button class="btn-clear" id="btn-clear" data-i18n="btnClear">清 空</button>
+</div>
+<div id="dialog-overlay">
+  <div id="dialog-box">
+    <p id="dialog-msg" data-i18n="dialogMsg">是否要清空？</p>
+    <div class="dialog-btns">
+      <button class="btn-confirm" id="dialog-confirm" data-i18n="btnConfirm">确 认</button>
+      <button class="btn-cancel" id="dialog-cancel" data-i18n="btnCancel">取 消</button>
+    </div>
+  </div>
+</div>
+<div id="import-dialog-overlay">
+  <div id="import-dialog-box">
+    <h3 data-i18n="importTitle">手动输入题目</h3>
+    <p class="import-hint" data-i18n="importHint">请输入9行数独题目，每行9个字符（数字1-9表示已知，其余表示未知）</p>
+    <textarea id="import-textarea" data-placeholder="530070000&#10;600195000&#10;098000060&#10;800060003&#10;400803001&#10;700020006&#10;060000280&#10;000419005&#10;000080079"></textarea>
+    <div class="import-row">
+      <label data-i18n="placeholderLabel">占位符：</label>
+      <select id="import-placeholder">
+        <option value="0">0</option>
+        <option value="x">x</option>
+        <option value="*">*</option>
+      </select>
+    </div>
+    <div id="import-error"></div>
+    <div class="import-btns">
+      <button class="btn-import-confirm" id="btn-import-confirm" data-i18n="btnImportConfirm">导 入</button>
+      <button class="btn-import-cancel" id="btn-import-cancel" data-i18n="btnCancel">取 消</button>
+    </div>
+  </div>
+</div>
+<script>
+const I18n = {
+  currentLang: "zh",
+  translations: {
+    zh: {
+      title: "数独求解器",
+      btnFill: "填入示例", btnImport: "手动输入", btnSolve: "求 解", btnClear: "清 空",
+      btnConfirm: "确 认", btnCancel: "取 消",
+      btnPrev: "上一个解", btnNext: "下一个解",
+      dialogMsg: "是否要清空？",
+      importTitle: "手动输入题目",
+      importHint: "请输入9行数独题目，每行9个字符（数字1-9表示已知，其余表示未知）",
+      placeholderLabel: "占位符：",
+      noSolution: "无解",
+      solutions: (n) => "共有 " + n + " 个解 (最多展示 5 个)",
+      emptyGrid: "请输入恰好9行数据。",
+      wrongLineLen: (r, len) => "第 " + r + " 行应有9个字符，当前有" + len + "个。",
+      invalidChar: (r, c) => "第 " + r + " 行第 " + c + " 列包含无效字符",
+      conflict: (r, c) => "冲突：第 " + r + " 行第 " + c + " 列的数字与同行/同列/同宫冲突。",
+      outOfRange: "请输入 1-9 之间的数字。",
+      conflictPos: (r, c) => "冲突：位置 (" + r + "," + c + ") 的数字与行/列/宫冲突。"
+    },
+    en: {
+      title: "Sudoku Solver",
+      btnFill: "Load Example", btnImport: "Manual Input", btnSolve: "Solve", btnClear: "Clear",
+      btnConfirm: "Confirm", btnCancel: "Cancel",
+      btnPrev: "Previous solution", btnNext: "Next solution",
+      dialogMsg: "Clear the board?",
+      importTitle: "Enter Puzzle Manually",
+      importHint: "Enter 9 lines of Sudoku puzzle, each line 9 characters (digits 1-9 for known, others for unknown)",
+      placeholderLabel: "Placeholder:",
+      noSolution: "No solution",
+      solutions: (n) => "Total " + n + " solutions (max 5 shown)",
+      emptyGrid: "Please enter exactly 9 lines.",
+      wrongLineLen: (r, len) => "Line " + r + " should have 9 characters, currently has " + len + ".",
+      invalidChar: (r, c) => "Invalid character at line " + r + ", column " + c,
+      conflict: (r, c) => "Conflict: Number at line " + r + ", column " + c + " conflicts with same row/column/box.",
+      outOfRange: "Please enter a number between 1-9.",
+      conflictPos: (r, c) => "Conflict: Number at (" + r + "," + c + ") conflicts with row/column/box."
+    }
+  },
+  t(key) {
+    const msg = this.translations[this.currentLang][key];
+    if (typeof msg === "function") return msg;
+    return msg || key;
+  },
+  setLang(lang) {
+    if (!this.translations[lang]) return;
+    this.currentLang = lang;
+    document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+    document.title = I18n.t("title");
+    document.getElementById("page-title").textContent = I18n.t("title");
+    document.querySelectorAll("[data-i18n]").forEach(el => {
+      const key = el.getAttribute("data-i18n");
+      const val = I18n.t(key);
+      if (typeof val === "function") return;
+      el.textContent = val;
+    });
+    document.getElementById("btn-prev").title = I18n.t("btnPrev");
+    document.getElementById("btn-next").title = I18n.t("btnNext");
+    updateTextareaPlaceholder();
+    updateTextareaPlaceholderLang();
+  }
+};
+
+function updateTextareaPlaceholder() {
+  const ph = document.getElementById("import-placeholder").value;
+  document.getElementById("import-textarea").placeholder =
+    document.getElementById("import-textarea").dataset.placeholder.replace(/0/g, ph);
+}
+function updateTextareaPlaceholderLang() {
+  document.getElementById("lang-select").value = I18n.currentLang;
+}
+document.getElementById("import-placeholder").addEventListener("change", updateTextareaPlaceholder);
+document.getElementById("lang-select").addEventListener("change", e => { I18n.setLang(e.target.value); });
+I18n.setLang(I18n.currentLang);
+
+const Solver = (() => {
+  const N = 9, SIZE = N * N;
+  function isValid(grid, row, col, num) {
+    for (let c = 0; c < N; c++) { if (grid[row * N + c] === num) return false; }
+    for (let r = 0; r < N; r++) { if (grid[r * N + col] === num) return false; }
+    const br = Math.floor(row / 3) * 3, bc = Math.floor(col / 3) * 3;
+    for (let r = br; r < br + 3; r++) {
+      for (let c = bc; c < bc + 3; c++) { if (grid[r * N + c] === num) return false; }
+    }
+    return true;
+  }
+  function solve(grid, pos, solutions, maxSolutions) {
+    if (solutions.length >= maxSolutions) return;
+    if (pos === SIZE) { solutions.push(new Int8Array(grid)); return; }
+    const row = Math.floor(pos / N), col = pos % N;
+    if (grid[pos] !== 0) { solve(grid, pos + 1, solutions, maxSolutions); return; }
+    for (let num = 1; num <= N; num++) {
+      if (isValid(grid, row, col, num)) { grid[pos] = num; solve(grid, pos + 1, solutions, maxSolutions); grid[pos] = 0; }
+    }
+  }
+  function findSolutions(input, maxSolutions = 5) {
+    const grid = new Int8Array(input), solutions = [];
+    solve(grid, 0, solutions, maxSolutions);
+    return { count: solutions.length, solutions };
+  }
+  return { findSolutions, isValid };
+})();
+const EXAMPLE = [
+  5,3,0, 0,7,0, 0,0,0, 6,0,0, 1,9,5, 0,0,0,
+  0,9,8, 0,0,0, 0,6,0, 8,0,0, 0,6,0, 0,0,3,
+  4,0,0, 8,0,3, 0,0,1, 7,0,0, 0,2,0, 0,0,6,
+  0,6,0, 0,0,0, 2,8,0, 0,0,0, 4,1,9, 0,0,5,
+  0,0,0, 0,8,0, 0,7,9
+];
+function loadExample() {
+  for (let i = 0; i < 81; i++) {
+    if (EXAMPLE[i] !== 0) { cells[i].value = EXAMPLE[i]; cells[i].classList.add("origin"); }
+    else { cells[i].value = ""; cells[i].classList.remove("origin", "solution"); }
+  }
+  countDisplay.textContent = ""; navGroup.classList.remove("visible");
+  allSolutions = []; currentIdx = -1; totalCount = 0; errorEl.textContent = "";
+}
+const boardEl = document.getElementById("board"), cells = [];
+function createBoard() {
+  boardEl.innerHTML = ""; cells.length = 0;
+  for (let i = 0; i < 81; i++) {
+    const cell = document.createElement("input");
+    cell.type = "text"; cell.maxLength = 1; cell.className = "cell";
+    const col = i % 9, row = Math.floor(i / 9);
+    if (col === 2 || col === 5) cell.classList.add("br");
+    if (row === 2 || row === 5) cell.classList.add("bb");
+    cell.addEventListener("input", e => {
+      const v = e.target.value;
+      if (!/^[1-9]$/.test(v)) e.target.value = "";
+      clearHighlights();
+    });
+    boardEl.appendChild(cell); cells.push(cell);
+  }
+}
+function getGrid() {
+  const g = new Array(81);
+  for (let i = 0; i < 81; i++) { const v = cells[i].value.trim(); g[i] = v === "" ? 0 : parseInt(v, 10); }
+  return g;
+}
+function setGrid(g) {
+  for (let i = 0; i < 81; i++) {
+    cells[i].value = g[i] === 0 ? "" : String(g[i]);
+    cells[i].classList.remove("origin", "solution");
+    if (g[i] !== 0) cells[i].classList.add("origin");
+  }
+}
+function clearHighlights() { for (const c of cells) c.classList.remove("solution"); }
+const dialogOverlay = document.getElementById("dialog-overlay");
+const dialogConfirm = document.getElementById("dialog-confirm");
+const dialogCancel = document.getElementById("dialog-cancel");
+let dialogCb = null;
+function showConfirm(msg, cb) {
+  dialogOverlay.querySelector("p").textContent = msg;
+  dialogOverlay.classList.add("show"); dialogCb = cb;
+}
+function hideConfirm() { dialogOverlay.classList.remove("show"); dialogCb = null; }
+dialogConfirm.addEventListener("click", () => { if (dialogCb) dialogCb(); hideConfirm(); });
+dialogCancel.addEventListener("click", hideConfirm);
+let allSolutions = [], currentIdx = -1, totalCount = 0, inputGrid = [];
+const countDisplay = document.getElementById("count-display");
+const navGroup = document.getElementById("nav-group");
+const btnPrev = document.getElementById("btn-prev");
+const btnNext = document.getElementById("btn-next");
+const pageLabel = document.getElementById("page-label");
+const errorEl = document.getElementById("error-display");
+const btnSolve = document.getElementById("btn-solve");
+const btnFill = document.getElementById("btn-fill");
+btnSolve.addEventListener("click", () => {
+  errorEl.textContent = ""; inputGrid = getGrid();
+  for (let i = 0; i < 81; i++) {
+    if (inputGrid[i] < 0 || inputGrid[i] > 9) { errorEl.textContent = I18n.t("outOfRange"); return; }
+  }
+  const originalInput = new Int8Array(inputGrid);
+  for (let i = 0; i < 81; i++) {
+    if (inputGrid[i] === 0) continue;
+    const r = Math.floor(i / 9), c = i % 9, val = inputGrid[i];
+    inputGrid[i] = 0;
+    if (!Solver.isValid(inputGrid, r, c, val)) {
+      errorEl.textContent = I18n.t("conflictPos")(r + 1, c + 1);
+      inputGrid[i] = val; return;
+    }
+    inputGrid[i] = val;
+  }
+  const result = Solver.findSolutions(inputGrid, 5);
+  totalCount = result.count; allSolutions = result.solutions; displayResults();
+  if (allSolutions.length > 0) showCurrentSolution();
+});
+function displayResults() {
+  if (totalCount === 0) {
+    countDisplay.textContent = I18n.t("noSolution"); navGroup.classList.remove("visible");
+  } else {
+    countDisplay.textContent = I18n.t("solutions")(totalCount);
+    currentIdx = 0;
+    if (Math.min(totalCount, 5) > 1) { navGroup.classList.add("visible"); updateNav(); }
+    else { navGroup.classList.remove("visible"); }
+  }
+}
+function showCurrentSolution() {
+  if (allSolutions.length === 0) return;
+  setGrid(inputGrid);
+  const sol = allSolutions[currentIdx];
+  for (let i = 0; i < 81; i++) {
+    if (inputGrid[i] === 0 && sol[i] !== 0) {
+      cells[i].value = String(sol[i]); cells[i].classList.add("solution");
+    }
+  }
+}
+function updateNav() {
+  const total = Math.min(allSolutions.length, 5);
+  pageLabel.textContent = (currentIdx + 1) + "/" + total;
+  btnPrev.disabled = currentIdx <= 0;
+  btnNext.disabled = currentIdx >= total - 1;
+}
+btnPrev.addEventListener("click", () => { if (currentIdx > 0) { currentIdx--; showCurrentSolution(); updateNav(); } });
+btnNext.addEventListener("click", () => { if (currentIdx < allSolutions.length - 1) { currentIdx++; showCurrentSolution(); updateNav(); } });
+btnFill.addEventListener("click", loadExample);
+const importOverlay = document.getElementById("import-dialog-overlay");
+const importTextarea = document.getElementById("import-textarea");
+const importPlaceholder = document.getElementById("import-placeholder");
+const importErrorEl = document.getElementById("import-error");
+const btnImportConfirm = document.getElementById("btn-import-confirm");
+const btnImportCancel = document.getElementById("btn-import-cancel");
+function showImportDialog() { importErrorEl.textContent = ""; importOverlay.classList.add("show"); }
+function hideImportDialog() { importOverlay.classList.remove("show"); }
+btnImportCancel.addEventListener("click", hideImportDialog);
+function checkConflicts(grid) {
+  for (let i = 0; i < 81; i++) {
+    if (grid[i] === 0) continue;
+    const r = Math.floor(i / 9), c = i % 9, val = grid[i];
+    grid[i] = 0;
+    if (!Solver.isValid(grid, r, c, val)) { grid[i] = val; return { conflict: true, position: i }; }
+    grid[i] = val;
+  }
+  return { conflict: false };
+}
+btnImportConfirm.addEventListener("click", () => {
+  importErrorEl.textContent = "";
+  const placeholder = importPlaceholder.value;
+  const text = importTextarea.value.trim() || importTextarea.placeholder;
+  const raw = text.replace(/\r/g, "").split("\n");
+  const lines = raw.filter(line => line.trim().length > 0);
+  if (lines.length !== 9) { importErrorEl.textContent = I18n.t("emptyGrid"); return; }
+  const grid = [];
+  for (let r = 0; r < 9; r++) {
+    const line = lines[r];
+    if (line.length !== 9) { importErrorEl.textContent = I18n.t("wrongLineLen")(r + 1, line.length); return; }
+    for (let c = 0; c < 9; c++) {
+      const ch = line[c];
+      if (ch >= "1" && ch <= "9") { grid.push(parseInt(ch, 10)); }
+      else if (ch === placeholder) { grid.push(0); }
+      else { importErrorEl.textContent = I18n.t("invalidChar")(r + 1, c + 1); return; }
+    }
+  }
+  const result = checkConflicts(grid);
+  if (result.conflict) {
+    const pos = result.position;
+    importErrorEl.textContent = I18n.t("conflict")(Math.floor(pos / 9) + 1, (pos % 9) + 1);
+    return;
+  }
+  setGrid(grid); countDisplay.textContent = ""; navGroup.classList.remove("visible");
+  allSolutions = []; currentIdx = -1; totalCount = 0; errorEl.textContent = ""; hideImportDialog();
+});
+const btnImport = document.getElementById("btn-import");
+btnImport.addEventListener("click", showImportDialog);
+document.getElementById("btn-clear").addEventListener("click", () => { showConfirm(I18n.t("dialogMsg"), resetBoard); });
+function resetBoard() {
+  for (const c of cells) { c.value = ""; c.classList.remove("origin", "solution"); }
+  countDisplay.textContent = ""; navGroup.classList.remove("visible");
+  allSolutions = []; currentIdx = -1; totalCount = 0; errorEl.textContent = "";
+}
+createBoard();
+</script>
+</body>
+</html>
