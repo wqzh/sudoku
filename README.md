@@ -1,6 +1,7 @@
 
 中文 | [English](README_en.md)
 
+[点击我，立刻打开数独求解器](https://htmlpreview.github.io/?https://raw.githubusercontent.com/wqzh/sudoku/blob/main/browser/index.html)
 
 # 数独求解器
 

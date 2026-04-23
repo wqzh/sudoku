@@ -1,5 +1,7 @@
 [中文](README.md) | English
 
+[Click me, Open Sudoku solver](https://htmlpreview.github.io/?https://raw.githubusercontent.com/wqzh/sudoku/blob/main/browser/index.html)
+
 # Sudoku Solver
 
 A backtracking-based Sudoku solver supporting Web, Android, and C platforms.
